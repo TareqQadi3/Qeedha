@@ -1,0 +1,29 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local", "**/tsconfig.json"],
+  "globalEnv": ["NODE_ENV", "DATABASE_URL", "REDIS_URL", "JWT_SECRET", "JWT_REFRESH_SECRET"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build", "^db:generate"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "build/**"]
+    },
+    "dev": {
+      "dependsOn": ["^db:generate"],
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^db:generate"]
+    },
+    "typecheck": {
+      "dependsOn": ["^db:generate"]
+    },
+    "db:generate": {
+      "cache": false
+    },
+    "test": {
+      "dependsOn": ["^db:generate"],
+      "outputs": ["coverage/**"]
+    }
+  }
+}

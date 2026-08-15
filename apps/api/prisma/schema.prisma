@@ -1,0 +1,447 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CustomerStatus {
+  ACTIVE
+  PENDING_KYC
+  SUSPENDED
+  DELETED
+}
+
+enum MerchantStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum MerchantUserRole {
+  OWNER
+  MANAGER
+  CASHIER
+}
+
+enum FinancingPlan {
+  PAY_IN_1
+  PAY_IN_30
+  INSTALLMENTS_4
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  DEFAULTED
+}
+
+enum WalletStatus {
+  ACTIVE
+  FROZEN
+  EXPIRED
+  CLOSED
+}
+
+enum TransactionType {
+  ACTIVATION
+  PURCHASE
+  REFUND
+  REVERSAL
+}
+
+enum TransactionMethod {
+  QR
+  OTP
+  MANUAL
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum SettlementStatus {
+  PENDING
+  PAID
+  RECONCILED
+}
+
+enum PaymentScheduleStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum NotificationChannel {
+  SMS
+  PUSH
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum OtpPurpose {
+  LOGIN
+  REGISTER
+  RESET_PIN
+  PAYMENT
+}
+
+model Customer {
+  id                String         @id @default(uuid()) @db.Uuid
+  phone             String         @unique
+  nationalIdHash    String?        @map("national_id_hash")
+  fullName          String         @map("full_name")
+  nafathVerifiedAt  DateTime?      @map("nafath_verified_at")
+  status            CustomerStatus @default(PENDING_KYC)
+  deviceId          String?        @map("device_id")
+  pinHash           String?        @map("pin_hash")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  deletedAt         DateTime?      @map("deleted_at")
+
+  financingApplications FinancingApplication[]
+  wallets               Wallet[]
+  refreshTokens         RefreshToken[]
+
+  @@index([phone])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("customers")
+}
+
+model Merchant {
+  id              String        @id @default(uuid()) @db.Uuid
+  name            String
+  crNumber        String?       @unique @map("cr_number")
+  ibanEncrypted   String?       @map("iban_encrypted")
+  commissionRate  Decimal       @default(0.03) @db.Decimal(5, 4) @map("commission_rate")
+  status          MerchantStatus @default(PENDING)
+  ownerId         String?       @map("owner_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+
+  branches      Branch[]
+  users         MerchantUser[]
+  wallets       Wallet[]
+  settlements   Settlement[]
+  applications  FinancingApplication[]
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("merchants")
+}
+
+model Branch {
+  id          String    @id @default(uuid()) @db.Uuid
+  merchantId  String    @map("merchant_id") @db.Uuid
+  name        String
+  geoLocation Json?     @map("geo_location")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  merchant     Merchant       @relation(fields: [merchantId], references: [id])
+  transactions Transaction[]
+
+  @@index([merchantId])
+  @@map("branches")
+}
+
+model MerchantUser {
+  id             String           @id @default(uuid()) @db.Uuid
+  merchantId     String           @map("merchant_id") @db.Uuid
+  role           MerchantUserRole
+  phone          String
+  passwordHash   String           @map("password_hash")
+  pinHash        String?          @map("pin_hash")
+  fullName       String?          @map("full_name")
+  status         String           @default("ACTIVE")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  deletedAt      DateTime?        @map("deleted_at")
+
+  merchant     Merchant       @relation(fields: [merchantId], references: [id])
+  transactions Transaction[]
+  refreshTokens RefreshToken[]
+
+  @@unique([merchantId, phone])
+  @@index([merchantId, role])
+  @@map("merchant_users")
+}
+
+model RefreshToken {
+  id              String    @id @default(uuid()) @db.Uuid
+  customerId      String?   @map("customer_id") @db.Uuid
+  merchantUserId  String?   @map("merchant_user_id") @db.Uuid
+  platformStaffId String?   @map("platform_staff_id") @db.Uuid
+  tokenHash       String    @map("token_hash")
+  expiresAt       DateTime  @map("expires_at")
+  rotatedFrom     String?   @map("rotated_from") @db.Uuid
+  revokedAt       DateTime? @map("revoked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  customer     Customer?      @relation(fields: [customerId], references: [id])
+  merchantUser MerchantUser?  @relation(fields: [merchantUserId], references: [id])
+  platformStaff PlatformStaff? @relation(fields: [platformStaffId], references: [id])
+
+  @@unique([tokenHash])
+  @@index([customerId])
+  @@index([merchantUserId])
+  @@index([platformStaffId])
+  @@map("refresh_tokens")
+}
+
+model FinancingProvider {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  adapterKey  String    @unique @map("adapter_key")
+  config      Json
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  applications FinancingApplication[]
+
+  @@map("financing_providers")
+}
+
+model FinancingApplication {
+  id          String           @id @default(uuid()) @db.Uuid
+  customerId  String           @map("customer_id") @db.Uuid
+  merchantId  String           @map("merchant_id") @db.Uuid
+  providerId  String           @map("provider_id") @db.Uuid
+  amount      Decimal          @db.Decimal(19, 4)
+  planType    FinancingPlan    @map("plan_type")
+  status      ApplicationStatus @default(PENDING)
+  providerRef String?          @map("provider_ref")
+  decidedAt   DateTime?        @map("decided_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  deletedAt   DateTime?        @map("deleted_at")
+
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  merchant        Merchant         @relation(fields: [merchantId], references: [id])
+  provider        FinancingProvider @relation(fields: [providerId], references: [id])
+  wallet          Wallet?
+  paymentSchedule PaymentSchedule[]
+
+  @@index([customerId, status])
+  @@index([merchantId, status])
+  @@index([providerId, status])
+  @@map("financing_applications")
+}
+
+model Wallet {
+  id              String        @id @default(uuid()) @db.Uuid
+  customerId      String        @map("customer_id") @db.Uuid
+  merchantId      String        @map("merchant_id") @db.Uuid
+  applicationId     String        @unique @map("application_id") @db.Uuid
+  totalAmount     Decimal       @db.Decimal(19, 4) @map("total_amount")
+  remainingAmount Decimal       @db.Decimal(19, 4) @map("remaining_amount")
+  status          WalletStatus  @default(ACTIVE)
+  expiresAt       DateTime?     @map("expires_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
+
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  merchant     Merchant      @relation(fields: [merchantId], references: [id])
+  application  FinancingApplication @relation(fields: [applicationId], references: [id])
+  transactions Transaction[]
+
+  @@index([customerId, status])
+  @@index([merchantId, status])
+  @@map("wallets")
+}
+
+model Transaction {
+  id              String            @id @default(uuid()) @db.Uuid
+  walletId        String            @map("wallet_id") @db.Uuid
+  branchId        String?           @map("branch_id") @db.Uuid
+  cashierId       String?           @map("cashier_id") @db.Uuid
+  type            TransactionType
+  amount          Decimal           @db.Decimal(19, 4)
+  method          TransactionMethod
+  status          TransactionStatus @default(PENDING)
+  idempotencyKey  String            @unique @map("idempotency_key")
+  metadata        Json?
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  deletedAt       DateTime?         @map("deleted_at")
+
+  wallet   Wallet        @relation(fields: [walletId], references: [id])
+  branch   Branch?       @relation(fields: [branchId], references: [id])
+  cashier  MerchantUser? @relation(fields: [cashierId], references: [id])
+  ledgerEntries LedgerEntry[]
+
+  @@index([walletId, createdAt])
+  @@index([cashierId, createdAt])
+  @@index([idempotencyKey])
+  @@map("transactions")
+}
+
+model LedgerEntry {
+  id              String   @id @default(uuid()) @db.Uuid
+  transactionRef  String   @map("transaction_ref") @db.Uuid
+  debitAccount    String   @map("debit_account")
+  creditAccount   String   @map("credit_account")
+  amount          Decimal  @db.Decimal(19, 4)
+  currency        String   @default("SAR")
+  description     String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  transaction Transaction @relation(fields: [transactionRef], references: [id])
+
+  @@index([transactionRef])
+  @@index([debitAccount])
+  @@index([creditAccount])
+  @@index([createdAt])
+  @@map("ledger_entries")
+}
+
+model Settlement {
+  id          String            @id @default(uuid()) @db.Uuid
+  merchantId  String            @map("merchant_id") @db.Uuid
+  period      String
+  gross       Decimal           @db.Decimal(19, 4)
+  commission    Decimal           @db.Decimal(19, 4)
+  net         Decimal           @db.Decimal(19, 4)
+  status      SettlementStatus  @default(PENDING)
+  bankRef     String?           @map("bank_ref")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  paidAt      DateTime?         @map("paid_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@index([merchantId, period])
+  @@index([status])
+  @@map("settlements")
+}
+
+model PaymentSchedule {
+  id              String                  @id @default(uuid()) @db.Uuid
+  applicationId   String                  @map("application_id") @db.Uuid
+  installmentNo   Int                     @map("installment_no")
+  amount          Decimal                 @db.Decimal(19, 4)
+  dueDate         DateTime                @map("due_date")
+  status          PaymentScheduleStatus   @default(PENDING)
+  paidAt          DateTime?               @map("paid_at")
+  providerRef     String?                 @map("provider_ref")
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+
+  application FinancingApplication @relation(fields: [applicationId], references: [id])
+
+  @@unique([applicationId, installmentNo])
+  @@index([applicationId, status])
+  @@index([dueDate, status])
+  @@map("payment_schedules")
+}
+
+model OtpCode {
+  id          String      @id @default(uuid()) @db.Uuid
+  phone       String
+  codeHash    String      @map("code_hash")
+  purpose     OtpPurpose
+  attempts    Int         @default(0)
+  expiresAt   DateTime    @map("expires_at")
+  usedAt      DateTime?   @map("used_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  @@index([phone])
+  @@index([phone, purpose, createdAt])
+  @@map("otp_codes")
+}
+
+model AuditLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  actorId     String?   @map("actor_id") @db.Uuid
+  actorType   String    @map("actor_type")
+  action      String
+  entity      String
+  entityId    String    @map("entity_id") @db.Uuid
+  before      Json?
+  after       Json?
+  ip          String?
+  userAgent   String?   @map("user_agent")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([entity, entityId])
+  @@index([actorId, actorType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id            String              @id @default(uuid()) @db.Uuid
+  recipientType String              @map("recipient_type")
+  recipientId   String              @map("recipient_id") @db.Uuid
+  channel       NotificationChannel
+  template      String
+  payload       Json
+  status        NotificationStatus  @default(PENDING)
+  providerRef   String?             @map("provider_ref")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  sentAt        DateTime?           @map("sent_at")
+
+  @@index([recipientId, recipientType, status])
+  @@index([status, createdAt])
+  @@map("notifications")
+}
+
+model IdempotencyKey {
+  id            String    @id @default(uuid()) @db.Uuid
+  key           String    @unique
+  resourceType  String    @map("resource_type")
+  resourceId    String?   @map("resource_id") @db.Uuid
+  requestHash   String?   @map("request_hash")
+  responseBody  Json?     @map("response_body")
+  expiresAt     DateTime  @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([key, resourceType])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+enum PlatformStaffRole {
+  SUPER_ADMIN
+  OPERATIONS
+  FINANCE
+  SUPPORT
+}
+
+enum PlatformStaffStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model PlatformStaff {
+  id            String              @id @default(uuid()) @db.Uuid
+  email         String              @unique
+  passwordHash  String              @map("password_hash")
+  role          PlatformStaffRole
+  status        PlatformStaffStatus @default(ACTIVE)
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+
+  @@index([role, status])
+  @@map("platform_staff")
+}

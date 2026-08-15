@@ -1,0 +1,23 @@
+{
+  "name": "@qeedha/customer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "تطبيق العميل (React Native - Android) لمنصة قيّدها",
+  "main": "expo/AppEntry.js",
+  "scripts": {
+    "dev": "expo start --android",
+    "build": "echo 'Customer app build is scaffold-only in Phase 1'",
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-native": "0.76.5",
+    "expo": "~52.0.0",
+    "@qeedha/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "typescript": "^5.7.3"
+  }
+}

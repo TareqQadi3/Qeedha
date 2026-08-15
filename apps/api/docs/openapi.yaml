@@ -1,0 +1,1419 @@
+openapi: 3.0.3
+info:
+  title: قيّدها (Qeedha) API
+  description: |
+    منصة رصيد البقالة الممول بالتقسيط.
+    النسخة 0.1.0 — المرحلة الأولى: عقود API الأساسية.
+  version: 0.1.0
+  contact:
+    name: Qeedha Engineering
+
+servers:
+  - url: http://localhost:3001/v1
+    description: Local development
+  - url: https://api.qeedha.app/v1
+    description: Production
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/otp/send:
+    post:
+      tags: ["التحقق والجلسات"]
+      summary: إرسال رمز OTP
+      description: |
+        يرسل OTP مؤلف من 6 أرقام إلى رقم الجوال. يُحصى عدد المحاولات ويُقيّد معدل الطلبات.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpSendRequest"
+      responses:
+        "202":
+          description: تم قبول الطلب (قد يكون الإرسال فعليًا أو محاكاة في البيئة المحلية)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpSentResponse"
+        "429":
+          description: تجاوز معدل الطلبات
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/otp/verify:
+    post:
+      tags: ["التحقق والجلسات"]
+      summary: التحقق من OTP
+      description: |
+        التحقق من OTP مع عدد محاولات محدود. عند النجاح يُنشّئ/يُسجّل المستخدم ويعيد رموز JWT.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpVerifyRequest"
+      responses:
+        "200":
+          description: تم التحقق
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: رمز خاطئ أو منتهي
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/refresh:
+    post:
+      tags: ["التحقق والجلسات"]
+      summary: تجديد JWT باستخدام Refresh Token دوّار
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: تم تجديد الرموز
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+
+  /auth/logout:
+    post:
+      tags: ["التحقق والجلسات"]
+      summary: إنهاء الجلسة وإبطال Refresh Token
+      responses:
+        "204":
+          description: تم تسجيل الخروج
+
+  /auth/pin/set:
+    post:
+      tags: ["التحقق والجلسات"]
+      summary: تعيين/تغيير PIN للتطبيق
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PinSetRequest"
+      responses:
+        "204":
+          description: تم تعيين PIN
+
+  /auth/pin/verify:
+    post:
+      tags: ["التحقق والجلسات"]
+      summary: التحقق من PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PinVerifyRequest"
+      responses:
+        "200":
+          description: PIN صحيح
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /customers/me:
+    get:
+      tags: ["العملاء"]
+      summary: بيانات العميل الحالي
+      responses:
+        "200":
+          description: بيانات العميل
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    patch:
+      tags: ["العملاء"]
+      summary: تحديث بيانات العميل
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerUpdateRequest"
+      responses:
+        "200":
+          description: تم التحديث
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /customers/me/kyc/nafath:
+    post:
+      tags: ["العملاء"]
+      summary: توثيق الهوية عبر نفاذ
+      description: يبدأ عملية توثيق نفاذ ويربط النتيجة بالعميل.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NafathRequest"
+      responses:
+        "202":
+          description: تم بدء التوثيق
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /merchants:
+    post:
+      tags: ["البقالات"]
+      summary: طلب انضمام بقالة جديد
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantOnboardingRequest"
+      responses:
+        "201":
+          description: تم إنشاء الطلب
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+
+  /merchants/me:
+    get:
+      tags: ["البقالات"]
+      summary: بيانات البقالة الحالية
+      responses:
+        "200":
+          description: بيانات البقالة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+    patch:
+      tags: ["البقالات"]
+      summary: تحديث بيانات البقالة
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantUpdateRequest"
+      responses:
+        "200":
+          description: تم التحديث
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+
+  /merchants/{merchantId}/branches:
+    parameters:
+      - $ref: "#/components/parameters/MerchantId"
+    get:
+      tags: ["البقالات"]
+      summary: قائمة فروع البقالة
+      responses:
+        "200":
+          description: قائمة الفروع
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchListResponse"
+    post:
+      tags: ["البقالات"]
+      summary: إضافة فرع
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BranchCreateRequest"
+      responses:
+        "201":
+          description: تم إنشاء الفرع
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Branch"
+
+  /merchants/{merchantId}/users:
+    parameters:
+      - $ref: "#/components/parameters/MerchantId"
+    get:
+      tags: ["البقالات"]
+      summary: مستخدمي البقالة
+      responses:
+        "200":
+          description: قائمة المستخدمين
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantUserListResponse"
+    post:
+      tags: ["البقالات"]
+      summary: إضافة مستخدم (كاشير/مدير)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantUserCreateRequest"
+      responses:
+        "201":
+          description: تم إنشاء المستخدم
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantUser"
+
+  /merchants/{merchantId}/users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/MerchantId"
+      - $ref: "#/components/parameters/UserId"
+    patch:
+      tags: ["البقالات"]
+      summary: تعديل صلاحيات/حالة مستخدم
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantUserUpdateRequest"
+      responses:
+        "200":
+          description: تم التحديث
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantUser"
+
+  /wallets:
+    get:
+      tags: ["المحافظ"]
+      summary: محافظ العميل الحالية
+      responses:
+        "200":
+          description: قائمة المحافظ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletListResponse"
+    post:
+      tags: ["المحافظ"]
+      summary: طلب رصيد جديد
+      description: |
+        ينشئ طلب تمويل (FinancingApplication) عبر FinancingGateway. في حالة عدم توفر مزود فعلي،
+        يمكن للأدمن الموافقة يدويًا عبر ManualAdapter.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletRequestCreate"
+      responses:
+        "201":
+          description: تم إنشاء الطلب
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletRequestResponse"
+
+  /wallets/{walletId}:
+    parameters:
+      - $ref: "#/components/parameters/WalletId"
+    get:
+      tags: ["المحافظ"]
+      summary: تفاصيل محفظة
+      responses:
+        "200":
+          description: تفاصيل المحفظة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Wallet"
+
+  /wallets/{walletId}/balance:
+    parameters:
+      - $ref: "#/components/parameters/WalletId"
+    get:
+      tags: ["المحافظ"]
+      summary: رصيد المحفظة المتبقي
+      responses:
+        "200":
+          description: الرصيد
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceResponse"
+
+  /transactions:
+    get:
+      tags: ["العمليات المالية"]
+      summary: سجل عمليات العميل/البقالة
+      parameters:
+        - name: walletId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: قائمة العمليات
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionListResponse"
+    post:
+      tags: ["العمليات المالية"]
+      summary: تنفيذ دفعة (QR أو OTP)
+      description: |
+        عملية دفع Idempotent باستخدام مفتاح Idempotency-Key. عند النجاح يتم خصم الرصيد وإنشاء
+        قيد مزدوج في ledger_entries.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentRequest"
+      responses:
+        "201":
+          description: تمت العملية
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "409":
+          description: مفتاح Idempotency مكرر
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /transactions/{transactionId}/refund:
+    parameters:
+      - $ref: "#/components/parameters/TransactionId"
+    post:
+      tags: ["العمليات المالية"]
+      summary: استرجاع عملية
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundRequest"
+      responses:
+        "201":
+          description: تم الاسترجاع
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+
+  /financing/applications:
+    get:
+      tags: ["التمويل"]
+      summary: طلبات التمويل الخاصة بالعميل/البقالة
+      responses:
+        "200":
+          description: قائمة الطلبات
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancingApplicationListResponse"
+
+  /financing/applications/{applicationId}:
+    parameters:
+      - $ref: "#/components/parameters/ApplicationId"
+    get:
+      tags: ["التمويل"]
+      summary: تفاصيل طلب التمويل
+      responses:
+        "200":
+          description: تفاصيل الطلب
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancingApplication"
+
+  /financing/applications/{applicationId}/schedule:
+    parameters:
+      - $ref: "#/components/parameters/ApplicationId"
+    get:
+      tags: ["التمويل"]
+      summary: جدول أقساط الطلب
+      responses:
+        "200":
+          description: جدول الأقساط
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentScheduleListResponse"
+
+  /financing/webhooks/{provider}:
+    post:
+      tags: ["التمويل"]
+      summary: Webhook وارد من مزود التمويل
+      description: |
+        يستقبل أحداث مزود التمويل (موافقة/رفض/سداد/تأخر/تعثر) بعد التحقق من التوقيع HMAC.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [tabby, tamara, manual]
+        - name: X-Idempotency-Key
+          in: header
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinancingWebhookPayload"
+      responses:
+        "200":
+          description: تم استلام الحدث
+
+  /settlements:
+    get:
+      tags: ["التسويات"]
+      summary: كشف التسويات للبقالة/المنصة
+      parameters:
+        - name: merchantId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/SettlementStatus"
+      responses:
+        "200":
+          description: قائمة التسويات
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementListResponse"
+
+  /settlements/{settlementId}:
+    parameters:
+      - $ref: "#/components/parameters/SettlementId"
+    get:
+      tags: ["التسويات"]
+      summary: تفاصيل تسوية
+      responses:
+        "200":
+          description: التسوية
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settlement"
+
+  /settlements/{settlementId}/reconcile:
+    parameters:
+      - $ref: "#/components/parameters/SettlementId"
+    post:
+      tags: ["التسويات"]
+      summary: تأكيد التسوية وإرفاق المرجع البنكي
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconcileRequest"
+      responses:
+        "200":
+          description: تمت التسوية
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settlement"
+
+  /notifications/push-token:
+    post:
+      tags: ["الإشعارات"]
+      summary: تسجيل/تحديث توكن FCM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushTokenRequest"
+      responses:
+        "204":
+          description: تم التسجيل
+
+  /admin/merchants:
+    get:
+      tags: ["لوحة الأدمن"]
+      summary: قائمة البقالات
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/MerchantStatus"
+      responses:
+        "200":
+          description: قائمة البقالات
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantListResponse"
+
+  /admin/merchants/{merchantId}/status:
+    parameters:
+      - $ref: "#/components/parameters/MerchantId"
+    patch:
+      tags: ["لوحة الأدمن"]
+      summary: تغيير حالة البقالة
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantStatusUpdateRequest"
+      responses:
+        "200":
+          description: تم التحديث
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+
+  /admin/applications:
+    get:
+      tags: ["لوحة الأدمن"]
+      summary: جميع طلبات التمويل
+      responses:
+        "200":
+          description: قائمة الطلبات
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancingApplicationListResponse"
+
+  /admin/applications/{applicationId}/decide:
+    parameters:
+      - $ref: "#/components/parameters/ApplicationId"
+    post:
+      tags: ["لوحة الأدمن"]
+      summary: قرار يدوي على طلب تمويل (ManualAdapter)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminDecisionRequest"
+      responses:
+        "200":
+          description: تم اتخاذ القرار
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancingApplication"
+
+  /admin/audit-logs:
+    get:
+      tags: ["لوحة الأدمن"]
+      summary: سجل التدقيق
+      parameters:
+        - name: entity
+          in: query
+          schema:
+            type: string
+        - name: entityId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: سجل التدقيق
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogListResponse"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT صالح يُرسل في ترويسة Authorization.
+
+  parameters:
+    MerchantId:
+      name: merchantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    WalletId:
+      name: walletId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TransactionId:
+      name: transactionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ApplicationId:
+      name: applicationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SettlementId:
+      name: settlementId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: مفتاح عالمي فريد لمنع تكرار العملية.
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [statusCode, message, error]
+      properties:
+        statusCode:
+          type: integer
+        message:
+          type: string
+        error:
+          type: string
+        code:
+          type: string
+
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    OtpSendRequest:
+      type: object
+      required: [phone, purpose]
+      properties:
+        phone:
+          type: string
+          example: "+966501234567"
+        purpose:
+          $ref: "#/components/schemas/OtpPurpose"
+
+    OtpPurpose:
+      type: string
+      enum: [LOGIN, REGISTER, RESET_PIN, PAYMENT]
+
+    OtpSentResponse:
+      type: object
+      required: [expiresInSeconds, canResendInSeconds]
+      properties:
+        expiresInSeconds:
+          type: integer
+          example: 120
+        canResendInSeconds:
+          type: integer
+          example: 60
+
+    OtpVerifyRequest:
+      type: object
+      required: [phone, code, purpose]
+      properties:
+        phone:
+          type: string
+        code:
+          type: string
+          pattern: "^\\d{6}$"
+        purpose:
+          $ref: "#/components/schemas/OtpPurpose"
+
+    TokenResponse:
+      type: object
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+          example: 900
+        isNewUser:
+          type: boolean
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    PinSetRequest:
+      type: object
+      required: [pin]
+      properties:
+        pin:
+          type: string
+          pattern: "^\\d{4,6}$"
+
+    PinVerifyRequest:
+      type: object
+      required: [pin]
+      properties:
+        pin:
+          type: string
+
+    Customer:
+      type: object
+      required: [id, phone, fullName, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        phone:
+          type: string
+        fullName:
+          type: string
+        status:
+          $ref: "#/components/schemas/CustomerStatus"
+        nafathVerifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CustomerStatus:
+      type: string
+      enum: [ACTIVE, PENDING_KYC, SUSPENDED, DELETED]
+
+    CustomerUpdateRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+
+    NafathRequest:
+      type: object
+      required: [nationalId]
+      properties:
+        nationalId:
+          type: string
+          example: "1234567890"
+
+    MerchantOnboardingRequest:
+      type: object
+      required: [name, crNumber, ownerPhone, iban]
+      properties:
+        name:
+          type: string
+        crNumber:
+          type: string
+        ownerPhone:
+          type: string
+        iban:
+          type: string
+          example: "SA03..."
+
+    Merchant:
+      type: object
+      required: [id, name, status, commissionRate]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        crNumber:
+          type: string
+        status:
+          $ref: "#/components/schemas/MerchantStatus"
+        commissionRate:
+          type: number
+          format: decimal
+
+    MerchantStatus:
+      type: string
+      enum: [PENDING, ACTIVE, SUSPENDED, CLOSED]
+
+    MerchantUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        iban:
+          type: string
+
+    Branch:
+      type: object
+      required: [id, merchantId, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        geoLocation:
+          type: object
+
+    BranchCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        geoLocation:
+          type: object
+
+    BranchListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Branch"
+
+    MerchantUser:
+      type: object
+      required: [id, merchantId, role, phone, fullName, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        role:
+          $ref: "#/components/schemas/MerchantUserRole"
+        phone:
+          type: string
+        fullName:
+          type: string
+        status:
+          type: string
+
+    MerchantUserRole:
+      type: string
+      enum: [OWNER, MANAGER, CASHIER]
+
+    MerchantUserCreateRequest:
+      type: object
+      required: [phone, role, fullName]
+      properties:
+        phone:
+          type: string
+        role:
+          $ref: "#/components/schemas/MerchantUserRole"
+        fullName:
+          type: string
+
+    MerchantUserUpdateRequest:
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/MerchantUserRole"
+        status:
+          type: string
+
+    MerchantUserListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MerchantUser"
+
+    Wallet:
+      type: object
+      required: [id, customerId, merchantId, totalAmount, remainingAmount, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        merchantName:
+          type: string
+        totalAmount:
+          type: number
+          format: decimal
+        remainingAmount:
+          type: number
+          format: decimal
+        status:
+          $ref: "#/components/schemas/WalletStatus"
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    WalletStatus:
+      type: string
+      enum: [ACTIVE, FROZEN, EXPIRED, CLOSED]
+
+    WalletListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Wallet"
+
+    WalletRequestCreate:
+      type: object
+      required: [merchantId, amount, planType]
+      properties:
+        merchantId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+          example: 1000
+        planType:
+          $ref: "#/components/schemas/FinancingPlan"
+
+    FinancingPlan:
+      type: string
+      enum: [PAY_IN_1, PAY_IN_30, INSTALLMENTS_4]
+
+    WalletRequestResponse:
+      type: object
+      required: [applicationId, status]
+      properties:
+        applicationId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/ApplicationStatus"
+
+    ApplicationStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED, CANCELLED, DEFAULTED]
+
+    BalanceResponse:
+      type: object
+      required: [remainingAmount, totalAmount, currency]
+      properties:
+        remainingAmount:
+          type: number
+          format: decimal
+        totalAmount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          example: SAR
+
+    PaymentRequest:
+      type: object
+      required: [walletId, amount, method]
+      properties:
+        walletId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+        method:
+          $ref: "#/components/schemas/TransactionMethod"
+        token:
+          type: string
+          description: توكن QR الموقّع (للـ QR) أو رمز OTP (للـ OTP)
+        branchId:
+          type: string
+          format: uuid
+        cashierId:
+          type: string
+          format: uuid
+        metadata:
+          type: object
+
+    TransactionMethod:
+      type: string
+      enum: [QR, OTP, MANUAL]
+
+    RefundRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+        amount:
+          type: number
+          format: decimal
+          description: إذا لم يُرسل، يُسترجع المبلغ بالكامل.
+
+    Transaction:
+      type: object
+      required: [id, walletId, type, amount, method, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        walletId:
+          type: string
+          format: uuid
+        type:
+          $ref: "#/components/schemas/TransactionType"
+        amount:
+          type: number
+          format: decimal
+        method:
+          $ref: "#/components/schemas/TransactionMethod"
+        status:
+          $ref: "#/components/schemas/TransactionStatus"
+        createdAt:
+          type: string
+          format: date-time
+
+    TransactionType:
+      type: string
+      enum: [ACTIVATION, PURCHASE, REFUND, REVERSAL]
+
+    TransactionStatus:
+      type: string
+      enum: [PENDING, COMPLETED, FAILED, REVERSED]
+
+    TransactionListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    FinancingApplication:
+      type: object
+      required: [id, customerId, merchantId, providerId, amount, planType, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        providerId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: decimal
+        planType:
+          $ref: "#/components/schemas/FinancingPlan"
+        status:
+          $ref: "#/components/schemas/ApplicationStatus"
+        providerRef:
+          type: string
+        decidedAt:
+          type: string
+          format: date-time
+
+    FinancingApplicationListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinancingApplication"
+
+    FinancingWebhookPayload:
+      type: object
+      required: [event, providerRef, occurredAt]
+      properties:
+        event:
+          type: string
+          enum:
+            - application.approved
+            - application.rejected
+            - installment.paid
+            - installment.overdue
+            - application.defaulted
+        providerRef:
+          type: string
+        applicationRef:
+          type: string
+        amount:
+          type: number
+          format: decimal
+        occurredAt:
+          type: string
+          format: date-time
+        signature:
+          type: string
+
+    PaymentSchedule:
+      type: object
+      required: [id, applicationId, installmentNo, amount, dueDate, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        applicationId:
+          type: string
+          format: uuid
+        installmentNo:
+          type: integer
+        amount:
+          type: number
+          format: decimal
+        dueDate:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/PaymentScheduleStatus"
+        paidAt:
+          type: string
+          format: date-time
+
+    PaymentScheduleStatus:
+      type: string
+      enum: [PENDING, PAID, OVERDUE]
+
+    PaymentScheduleListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentSchedule"
+
+    Settlement:
+      type: object
+      required: [id, merchantId, period, gross, commission, net, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        merchantId:
+          type: string
+          format: uuid
+        period:
+          type: string
+          example: "2026-07"
+        gross:
+          type: number
+          format: decimal
+        commission:
+          type: number
+          format: decimal
+        net:
+          type: number
+          format: decimal
+        status:
+          $ref: "#/components/schemas/SettlementStatus"
+        bankRef:
+          type: string
+
+    SettlementStatus:
+      type: string
+      enum: [PENDING, PAID, RECONCILED]
+
+    SettlementListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Settlement"
+
+    ReconcileRequest:
+      type: object
+      required: [bankRef]
+      properties:
+        bankRef:
+          type: string
+
+    PushTokenRequest:
+      type: object
+      required: [token, platform]
+      properties:
+        token:
+          type: string
+        platform:
+          type: string
+          enum: [android, ios, web]
+
+    MerchantStatusUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/MerchantStatus"
+        reason:
+          type: string
+
+    MerchantListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Merchant"
+
+    AdminDecisionRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVED, REJECTED]
+        reason:
+          type: string
+
+    AuditLog:
+      type: object
+      required: [id, actorType, action, entity, entityId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        actorId:
+          type: string
+          format: uuid
+        actorType:
+          type: string
+        action:
+          type: string
+        entity:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+        before:
+          type: object
+        after:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    AuditLogListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLog"
+        meta:
+          $ref: "#/components/schemas/PaginationMeta"
+
+    PaginationMeta:
+      type: object
+      required: [page, limit, total]
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
