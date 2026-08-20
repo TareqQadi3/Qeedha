@@ -3,6 +3,7 @@ import { createHmac } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/services/encryption.service';
+import { safeWebhookPost } from '../utils/ssrf-guard';
 
 /**
  * Best-effort webhook delivery. A failure here must never surface as a
@@ -63,18 +64,21 @@ export class WebhookDispatchService {
       const secret = this.encryption.decrypt(secretEncrypted);
       const signature = createHmac('sha256', secret).update(body).digest('hex');
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
+      // Re-resolves and re-validates the host immediately before connecting
+      // (defeats DNS rebinding) and pins the connection to that validated IP.
+      const response = await safeWebhookPost(
+        url,
+        body,
+        {
           'Content-Type': 'application/json',
           'X-Qeedha-Signature': `sha256=${signature}`,
         },
-        body,
-        signal: AbortSignal.timeout(5000),
-      });
+        5000,
+      );
 
       responseStatus = response.status;
-      status = response.ok ? 'SENT' : 'FAILED';
+      status =
+        response.status >= 200 && response.status < 300 ? 'SENT' : 'FAILED';
     } catch (err) {
       this.logger.error(
         `Webhook delivery failed for endpoint ${endpointId}`,

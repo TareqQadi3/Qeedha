@@ -11,6 +11,10 @@ import { TransactionsService } from '../../transactions/transactions.service';
 import { TransactionResponseDto } from '../../transactions/dto/transaction.dto';
 import { WebhookDispatchService } from './webhook-dispatch.service';
 import {
+  assertPublicHostname,
+  UnsafeWebhookUrlError,
+} from '../utils/ssrf-guard';
+import {
   CreateChargeDto,
   CreateRefundDto,
   IntegrationChargeResponse,
@@ -146,6 +150,19 @@ export class IntegrationService {
       },
     });
     if (existingTx) {
+      // The (externalSystem, externalTransactionId) pair is unique across
+      // ALL merchants, so a cache hit here does not by itself prove the
+      // caller owns it — re-verify tenant ownership before returning it,
+      // exactly like getChargeStatus/refundCharge do below.
+      const existingWallet = await this.prisma.wallet.findUnique({
+        where: { id: existingTx.walletId },
+      });
+      if (!existingWallet || existingWallet.merchantId !== merchantId) {
+        throw new DomainException(
+          'FORBIDDEN',
+          'Charge does not belong to this merchant',
+        );
+      }
       return this.toChargeResponse(existingTx);
     }
 
@@ -204,13 +221,16 @@ export class IntegrationService {
         transactionIdempotencyKey,
       );
       response = this.toChargeResponse(tx);
-      await this.webhooks.dispatch(
+      // Fire-and-forget: webhook delivery must never block the charge
+      // response (it can take up to the delivery timeout to complete, and
+      // dispatch() already swallows its own errors and never rejects).
+      void this.webhooks.dispatch(
         merchantId,
         'charge.succeeded',
         response as unknown as Record<string, unknown>,
       );
     } catch (err) {
-      await this.webhooks.dispatch(merchantId, 'charge.failed', {
+      void this.webhooks.dispatch(merchantId, 'charge.failed', {
         externalSystem: dto.externalSystem,
         externalTransactionId: dto.externalTransactionId,
         error: err instanceof Error ? err.message : 'unknown_error',
@@ -269,14 +289,14 @@ export class IntegrationService {
         refundTx,
         dto.externalTransactionId,
       );
-      await this.webhooks.dispatch(
+      void this.webhooks.dispatch(
         merchantId,
         'refund.succeeded',
         response as unknown as Record<string, unknown>,
       );
       return response;
     } catch (err) {
-      await this.webhooks.dispatch(merchantId, 'refund.failed', {
+      void this.webhooks.dispatch(merchantId, 'refund.failed', {
         externalSystem: dto.externalSystem,
         externalTransactionId: dto.externalTransactionId,
         error: err instanceof Error ? err.message : 'unknown_error',
@@ -317,6 +337,19 @@ export class IntegrationService {
     merchantId: string,
     dto: RegisterWebhookDto,
   ): Promise<{ id: string; url: string; secret: string }> {
+    // Reject loopback/private/link-local/cloud-metadata targets up front so a
+    // merchant cannot use webhook registration as an SSRF primitive. Checked
+    // again immediately before every dispatch (webhook-dispatch.service.ts)
+    // since the DNS answer can change between now and then.
+    try {
+      await assertPublicHostname(new URL(dto.url).hostname);
+    } catch (err) {
+      if (err instanceof UnsafeWebhookUrlError) {
+        throw new DomainException('VALIDATION_ERROR', err.message);
+      }
+      throw err;
+    }
+
     // The raw secret is only ever returned here, once. From this point on it
     // exists only encrypted (EncryptionService/AES-256-GCM) so it can later
     // be decrypted to sign outgoing webhook payloads (bcrypt would not allow that).

@@ -4,21 +4,29 @@ import { WebhookDispatchService } from '../src/integration/services/webhook-disp
 import { PrismaService } from '../src/prisma/prisma.service';
 import { EncryptionService } from '../src/common/services/encryption.service';
 import { createMockPrisma } from './mocks/prisma.mock';
+import * as ssrfGuard from '../src/integration/utils/ssrf-guard';
+
+jest.mock('../src/integration/utils/ssrf-guard', () => ({
+  ...jest.requireActual('../src/integration/utils/ssrf-guard'),
+  safeWebhookPost: jest.fn(),
+}));
 
 const mockEncryption = () => ({
   encrypt: jest.fn((v: string) => `enc:${v}`),
   decrypt: jest.fn((v: string) => v.replace('enc:', '')),
 });
 
+const safeWebhookPostMock = ssrfGuard.safeWebhookPost as jest.Mock;
+
 describe('WebhookDispatchService', () => {
   let service: WebhookDispatchService;
   let prisma: ReturnType<typeof createMockPrisma>;
   let encryption: ReturnType<typeof mockEncryption>;
-  const originalFetch = global.fetch;
 
   beforeEach(async () => {
     prisma = createMockPrisma();
     encryption = mockEncryption();
+    safeWebhookPostMock.mockReset();
 
     const module = await Test.createTestingModule({
       providers: [
@@ -31,11 +39,6 @@ describe('WebhookDispatchService', () => {
     service = module.get<WebhookDispatchService>(WebhookDispatchService);
   });
 
-  afterEach(() => {
-    global.fetch = originalFetch;
-    jest.restoreAllMocks();
-  });
-
   it('signs the payload with HMAC-SHA256 using the decrypted secret and records SENT on a 2xx response', async () => {
     (prisma.webhookEndpoint.findMany as jest.Mock).mockResolvedValue([
       {
@@ -46,23 +49,20 @@ describe('WebhookDispatchService', () => {
       },
     ]);
     (prisma.webhookDelivery.create as jest.Mock).mockResolvedValue({});
-
-    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
-    global.fetch = fetchMock as any;
+    safeWebhookPostMock.mockResolvedValue({ status: 200 });
 
     const payload = { foo: 'bar' };
     await service.dispatch('merch-1', 'charge.succeeded', payload);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, options] = fetchMock.mock.calls[0];
+    expect(safeWebhookPostMock).toHaveBeenCalledTimes(1);
+    const [url, body, headers, timeoutMs] = safeWebhookPostMock.mock.calls[0];
     expect(url).toBe('https://example.com/hook');
+    expect(timeoutMs).toBe(5000);
 
     const expectedSignature = createHmac('sha256', 'my-secret')
-      .update(JSON.stringify(payload))
+      .update(body)
       .digest('hex');
-    expect(options.headers['X-Qeedha-Signature']).toBe(
-      `sha256=${expectedSignature}`,
-    );
+    expect(headers['X-Qeedha-Signature']).toBe(`sha256=${expectedSignature}`);
 
     expect(prisma.webhookDelivery.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -85,10 +85,7 @@ describe('WebhookDispatchService', () => {
       },
     ]);
     (prisma.webhookDelivery.create as jest.Mock).mockResolvedValue({});
-
-    global.fetch = jest
-      .fn()
-      .mockResolvedValue({ ok: false, status: 500 }) as any;
+    safeWebhookPostMock.mockResolvedValue({ status: 500 });
 
     await service.dispatch('merch-1', 'charge.failed', { foo: 'bar' });
 
@@ -113,14 +110,34 @@ describe('WebhookDispatchService', () => {
       },
     ]);
     (prisma.webhookDelivery.create as jest.Mock).mockResolvedValue({});
-
-    global.fetch = jest
-      .fn()
-      .mockRejectedValue(new Error('network down')) as any;
+    safeWebhookPostMock.mockRejectedValue(new Error('network down'));
 
     await expect(
       service.dispatch('merch-1', 'charge.succeeded', { foo: 'bar' }),
     ).resolves.toBeUndefined();
+
+    expect(prisma.webhookDelivery.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ endpointId: 'ep-1', status: 'FAILED' }),
+      }),
+    );
+  });
+
+  it('records FAILED (without ever calling safeWebhookPost) when the URL resolves to a blocked address', async () => {
+    (prisma.webhookEndpoint.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'ep-1',
+        url: 'http://169.254.169.254/latest/meta-data/',
+        secretEncrypted: 'enc:my-secret',
+        isActive: true,
+      },
+    ]);
+    (prisma.webhookDelivery.create as jest.Mock).mockResolvedValue({});
+    safeWebhookPostMock.mockRejectedValue(
+      new ssrfGuard.UnsafeWebhookUrlError('blocked'),
+    );
+
+    await service.dispatch('merch-1', 'charge.succeeded', { foo: 'bar' });
 
     expect(prisma.webhookDelivery.create).toHaveBeenCalledWith(
       expect.objectContaining({
