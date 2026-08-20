@@ -116,6 +116,7 @@ model Customer {
   financingApplications FinancingApplication[]
   wallets               Wallet[]
   refreshTokens         RefreshToken[]
+  externalMappings      ExternalCustomerMapping[]
 
   @@index([phone])
   @@index([status])
@@ -135,11 +136,14 @@ model Merchant {
   updatedAt       DateTime      @updatedAt @map("updated_at")
   deletedAt       DateTime?     @map("deleted_at")
 
-  branches      Branch[]
-  users         MerchantUser[]
-  wallets       Wallet[]
-  settlements   Settlement[]
-  applications  FinancingApplication[]
+  branches                 Branch[]
+  users                    MerchantUser[]
+  wallets                  Wallet[]
+  settlements              Settlement[]
+  applications             FinancingApplication[]
+  apiCredentials           MerchantApiCredential[]
+  externalCustomerMappings ExternalCustomerMapping[]
+  webhookEndpoints         WebhookEndpoint[]
 
   @@index([status])
   @@index([deletedAt])
@@ -280,6 +284,9 @@ model Transaction {
   status          TransactionStatus @default(PENDING)
   idempotencyKey  String            @unique @map("idempotency_key")
   metadata        Json?
+  externalTransactionId String?     @map("external_transaction_id")
+  externalSystem        String?     @map("external_system")
+  invoiceReference      String?     @map("invoice_reference")
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
   deletedAt       DateTime?         @map("deleted_at")
@@ -289,6 +296,7 @@ model Transaction {
   cashier  MerchantUser? @relation(fields: [cashierId], references: [id])
   ledgerEntries LedgerEntry[]
 
+  @@unique([externalSystem, externalTransactionId])
   @@index([walletId, createdAt])
   @@index([cashierId, createdAt])
   @@index([idempotencyKey])
@@ -444,4 +452,83 @@ model PlatformStaff {
 
   @@index([role, status])
   @@map("platform_staff")
+}
+
+enum ApiCredentialStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// Integration API: lets an external system (e.g. Qeedha B) authenticate
+// server-to-server and create charges/refunds against a merchant's wallets.
+model MerchantApiCredential {
+  id            String              @id @default(uuid()) @db.Uuid
+  merchantId    String              @map("merchant_id") @db.Uuid
+  name          String
+  apiKey        String              @unique @map("api_key")
+  apiSecretHash String              @map("api_secret_hash")
+  status        ApiCredentialStatus @default(ACTIVE)
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  revokedAt     DateTime?           @map("revoked_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+
+  @@index([merchantId])
+  @@map("merchant_api_credentials")
+}
+
+model ExternalCustomerMapping {
+  id                 String   @id @default(uuid()) @db.Uuid
+  merchantId         String   @map("merchant_id") @db.Uuid
+  customerId         String   @map("customer_id") @db.Uuid
+  externalSystem     String   @map("external_system")
+  externalCustomerId String   @map("external_customer_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@unique([merchantId, externalSystem, externalCustomerId])
+  @@index([merchantId, customerId])
+  @@map("external_customer_mappings")
+}
+
+model WebhookEndpoint {
+  id              String   @id @default(uuid()) @db.Uuid
+  merchantId      String   @map("merchant_id") @db.Uuid
+  url             String
+  secretEncrypted String   @map("secret_encrypted")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  merchant   Merchant          @relation(fields: [merchantId], references: [id])
+  deliveries WebhookDelivery[]
+
+  @@index([merchantId])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id             String                @id @default(uuid()) @db.Uuid
+  endpointId     String                @map("endpoint_id") @db.Uuid
+  event          String
+  payload        Json
+  status         WebhookDeliveryStatus @default(PENDING)
+  responseStatus Int?                  @map("response_status")
+  attempts       Int                   @default(1)
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id])
+
+  @@index([endpointId, createdAt])
+  @@map("webhook_deliveries")
 }

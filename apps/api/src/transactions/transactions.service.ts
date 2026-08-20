@@ -189,6 +189,90 @@ export class TransactionsService {
     return response;
   }
 
+  /**
+   * Charges a wallet on behalf of a server-to-server integration (e.g. Qeedha B).
+   * Mirrors pay()'s DB-transaction/ledger/notification/audit block, but skips
+   * verifyPaymentToken entirely — the ApiCredentialGuard already established
+   * server-to-server trust — and stamps the external* columns used to keep
+   * the integration idempotent on (externalSystem, externalTransactionId).
+   */
+  async payFromIntegration(
+    dto: {
+      walletId: string;
+      amount: number;
+      branchId?: string;
+      externalTransactionId: string;
+      externalSystem: string;
+      invoiceReference?: string;
+      metadata?: Record<string, unknown>;
+    },
+    idempotencyKey: string,
+  ): Promise<TransactionResponseDto> {
+    const wallet = await this.prisma.wallet.findUnique({
+      where: { id: dto.walletId },
+    });
+    if (!wallet) throw new DomainException('NOT_FOUND', 'Wallet not found');
+    if (wallet.status !== 'ACTIVE') throw new DomainException('FORBIDDEN', 'Wallet is not active');
+    if (Number(wallet.remainingAmount) < dto.amount) {
+      throw new DomainException('FORBIDDEN', 'Insufficient wallet balance');
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedWallet = await tx.wallet.update({
+        where: { id: dto.walletId },
+        data: { remainingAmount: { decrement: dto.amount } },
+      });
+
+      if (Number(updatedWallet.remainingAmount) < 0) {
+        throw new DomainException('FORBIDDEN', 'Insufficient wallet balance');
+      }
+
+      const transaction = await tx.transaction.create({
+        data: {
+          walletId: dto.walletId,
+          branchId: dto.branchId ?? null,
+          cashierId: null,
+          type: 'PURCHASE',
+          amount: dto.amount,
+          method: 'MANUAL',
+          status: 'COMPLETED',
+          idempotencyKey,
+          metadata: (dto.metadata ?? Prisma.JsonNull) as any,
+          externalTransactionId: dto.externalTransactionId,
+          externalSystem: dto.externalSystem,
+          invoiceReference: dto.invoiceReference ?? null,
+        },
+      });
+
+      return { transaction, updatedWallet };
+    });
+
+    await this.ledger.post({
+      transactionId: result.transaction.id,
+      entries: this.ledger.purchaseEntries(dto.amount),
+    });
+
+    const response = this.toDto(result.transaction, Number(result.updatedWallet.remainingAmount));
+
+    await this.notifications.send({
+      recipientType: 'customer',
+      recipientId: wallet.customerId,
+      channel: 'PUSH',
+      template: 'purchase_completed',
+      payload: { amount: dto.amount, remaining: Number(result.updatedWallet.remainingAmount) },
+    });
+
+    await this.audit.log({
+      actorType: 'integration',
+      action: 'INTEGRATION_CHARGE_COMPLETED',
+      entity: 'transaction',
+      entityId: result.transaction.id,
+      after: response as unknown as Record<string, unknown>,
+    });
+
+    return response;
+  }
+
   async listByWallet(walletId: string) {
     return this.prisma.transaction.findMany({
       where: { walletId },
@@ -300,6 +384,10 @@ export class TransactionsService {
       status: tx.status,
       createdAt: tx.createdAt,
       remainingAmount,
+      branchId: tx.branchId,
+      externalTransactionId: tx.externalTransactionId,
+      externalSystem: tx.externalSystem,
+      invoiceReference: tx.invoiceReference,
     };
   }
 }

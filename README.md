@@ -59,6 +59,14 @@
 - **Audit:** سجل تدقيق لكل عملية مالية.
 - **اختبارات وحدة:** 24 اختبارًا ناجحًا للنواة المالية Wallets/Transactions/Ledger.
 
+## Integration API (تكامل Qeedha B)
+
+- **مصادقة Server-to-Server:** بيانات اعتماد لكل بقالة (`X-Api-Key` / `X-Api-Secret`) مُصدرة من لوحة الأدمن.
+- **ربط عملاء خارجيين:** `ExternalCustomerMapping` مع تحقق من ملكية العلاقة (محفظة فعلية) قبل الربط.
+- **الشحن والاسترجاع:** `POST /integration/v1/charges` و `/refunds` بمعرّف `externalTransactionId` كآلية Idempotency أساسية، إلى جانب `Idempotency-Key`، مع قيد أحادي العملة (SAR) في هذه النسخة.
+- **Webhooks:** تسجيل نقاط استقبال وتوقيع HMAC-SHA256 (سر مُشفّر بـ AES-256-GCM قابل لإعادة الفك)، بلا طابور إعادة محاولة في هذه المرحلة.
+- **إعادة استخدام:** الشحن يمر عبر `TransactionsService.payFromIntegration` نفسه المسؤول عن الـ Ledger، دون تكرار منطق الدفع.
+
 ## أدوات تشغيل
 
 - `pnpm dev` — وضع التطوير.

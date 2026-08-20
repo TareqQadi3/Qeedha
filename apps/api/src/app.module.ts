@@ -13,6 +13,7 @@ import { LedgerModule } from './ledger/ledger.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { FinancingModule } from './financing/financing.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { IntegrationModule } from './integration/integration.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     WalletsModule,
     FinancingModule,
     TransactionsModule,
+    IntegrationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -692,6 +692,219 @@ paths:
               schema:
                 $ref: "#/components/schemas/AuditLogListResponse"
 
+  /integration/v1/customers/mapping:
+    post:
+      tags: ["تكامل خارجي"]
+      summary: ربط عميل خارجي (مثل Qeedha B) بعميل Qeedha
+      description: |
+        يتحقق من أن العميل يملك محفظة فعلية مع هذه البقالة قبل إنشاء الربط (لا يمكن ربط
+        عميل لا توجد بينه وبين البقالة أي علاقة).
+      security:
+        - ApiKeyAuth: []
+          ApiSecretAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterCustomerMappingRequest"
+      responses:
+        "201":
+          description: تم إنشاء/تحديث الربط
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerMappingResponse"
+        "403":
+          description: العميل لا تربطه علاقة بهذه البقالة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /integration/v1/charges:
+    post:
+      tags: ["تكامل خارجي"]
+      summary: إنشاء عملية شحن (Charge) على محفظة عميل
+      description: |
+        عملية Idempotent بمفتاحين: `externalTransactionId` (الآلية الأساسية — إعادة إرسال
+        نفس المعرّف يعيد نفس النتيجة دون تكرار الخصم) و `Idempotency-Key` (كما في
+        `/transactions`). النسخة الحالية تدعم عملة SAR فقط.
+      security:
+        - ApiKeyAuth: []
+          ApiSecretAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChargeRequest"
+      responses:
+        "201":
+          description: تمت العملية (أو أعيدت نتيجة عملية سابقة بنفس externalTransactionId)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationChargeResponse"
+        "400":
+          description: عملة غير مدعومة أو بيانات غير صحيحة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: لا يوجد ربط عميل أو محفظة نشطة مطابقة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /integration/v1/charges/{externalSystem}/{externalTransactionId}:
+    parameters:
+      - name: externalSystem
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: externalTransactionId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: ["تكامل خارجي"]
+      summary: استعلام عن حالة عملية شحن
+      security:
+        - ApiKeyAuth: []
+          ApiSecretAuth: []
+      responses:
+        "200":
+          description: حالة العملية
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationChargeResponse"
+        "403":
+          description: العملية لا تخص هذه البقالة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: العملية غير موجودة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /integration/v1/refunds:
+    post:
+      tags: ["تكامل خارجي"]
+      summary: استرجاع عملية شحن سابقة عبر externalTransactionId
+      security:
+        - ApiKeyAuth: []
+          ApiSecretAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRefundIntegrationRequest"
+      responses:
+        "201":
+          description: تم الاسترجاع
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationChargeResponse"
+        "404":
+          description: العملية الأصلية غير موجودة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /integration/v1/webhooks:
+    post:
+      tags: ["تكامل خارجي"]
+      summary: تسجيل نقطة استقبال Webhook للبقالة
+      description: |
+        يعيد سر التوقيع (secret) نصًّا صريحًا مرة واحدة فقط عند الإنشاء؛ يُستخدم لاحقًا
+        للتحقق من توقيع HMAC-SHA256 المُرسل في ترويسة `X-Qeedha-Signature`.
+      security:
+        - ApiKeyAuth: []
+          ApiSecretAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterWebhookRequest"
+      responses:
+        "201":
+          description: تم تسجيل نقطة الاستقبال
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookEndpointResponse"
+
+  /admin/merchants/{merchantId}/api-credentials:
+    parameters:
+      - $ref: "#/components/parameters/MerchantId"
+    post:
+      tags: ["لوحة الأدمن"]
+      summary: إصدار بيانات اعتماد API لبقالة (للاستخدام من Qeedha B مثلًا)
+      description: يعيد `apiSecret` نصًّا صريحًا مرة واحدة فقط عند الإنشاء.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiCredentialRequest"
+      responses:
+        "201":
+          description: تم الإصدار
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiCredentialSecretResponse"
+    get:
+      tags: ["لوحة الأدمن"]
+      summary: قائمة بيانات اعتماد API لبقالة
+      responses:
+        "200":
+          description: قائمة بيانات الاعتماد (بدون الأسرار)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApiCredentialResponse"
+
+  /admin/merchants/{merchantId}/api-credentials/{credentialId}/revoke:
+    parameters:
+      - $ref: "#/components/parameters/MerchantId"
+      - name: credentialId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      tags: ["لوحة الأدمن"]
+      summary: إلغاء بيانات اعتماد API
+      responses:
+        "200":
+          description: تم الإلغاء
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiCredentialResponse"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -699,6 +912,16 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: JWT صالح يُرسل في ترويسة Authorization.
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: مفتاح API الخاص ببيانات اعتماد التكامل (MerchantApiCredential).
+    ApiSecretAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Secret
+      description: السر المطابق لمفتاح API.
 
   parameters:
     MerchantId:
@@ -1417,3 +1640,171 @@ components:
           type: integer
         totalPages:
           type: integer
+
+    RegisterCustomerMappingRequest:
+      type: object
+      required: [externalSystem, externalCustomerId, qeedhaCustomerId]
+      properties:
+        externalSystem:
+          type: string
+          example: "QEEDHA_B"
+        externalCustomerId:
+          type: string
+        qeedhaCustomerId:
+          type: string
+          format: uuid
+
+    CustomerMappingResponse:
+      type: object
+      required: [id, externalSystem, externalCustomerId, qeedhaCustomerId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        externalSystem:
+          type: string
+        externalCustomerId:
+          type: string
+        qeedhaCustomerId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateChargeRequest:
+      type: object
+      required: [externalCustomerId, externalSystem, externalTransactionId, amount, currency]
+      properties:
+        externalCustomerId:
+          type: string
+        externalSystem:
+          type: string
+          example: "QEEDHA_B"
+        externalTransactionId:
+          type: string
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          description: "يجب أن تكون SAR في هذه النسخة (قيد أحادي العملة v1)."
+          example: "SAR"
+        invoiceReference:
+          type: string
+        branchReference:
+          type: string
+          format: uuid
+          description: معرّف فرع تابع لنفس البقالة.
+        metadata:
+          type: object
+
+    CreateRefundIntegrationRequest:
+      type: object
+      required: [externalSystem, externalTransactionId]
+      properties:
+        externalSystem:
+          type: string
+        externalTransactionId:
+          type: string
+          description: معرّف عملية الشحن الأصلية المطلوب استرجاعها.
+        amount:
+          type: number
+          format: decimal
+          description: إذا لم يُرسل، يُسترجع المبلغ بالكامل.
+        reason:
+          type: string
+
+    IntegrationChargeResponse:
+      type: object
+      required: [qeedhaTransactionId, externalTransactionId, status, amount, currency, createdAt]
+      properties:
+        qeedhaTransactionId:
+          type: string
+          format: uuid
+        externalTransactionId:
+          type: string
+        status:
+          type: string
+          enum: [SUCCESS, PENDING, FAILED]
+        amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+          example: "SAR"
+        invoiceReference:
+          type: string
+          nullable: true
+        branchReference:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    RegisterWebhookRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: يُفضّل https.
+        events:
+          type: array
+          items:
+            type: string
+          example: ["charge.succeeded", "charge.failed", "refund.succeeded"]
+
+    WebhookEndpointResponse:
+      type: object
+      required: [id, url, secret]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+        secret:
+          type: string
+          description: يُعرض نصًّا صريحًا مرة واحدة فقط؛ استخدمه للتحقق من HMAC-SHA256 في X-Qeedha-Signature.
+
+    CreateApiCredentialRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: "Qeedha B Production"
+
+    ApiCredentialSecretResponse:
+      type: object
+      required: [id, apiKey, apiSecret]
+      properties:
+        id:
+          type: string
+          format: uuid
+        apiKey:
+          type: string
+        apiSecret:
+          type: string
+          description: يُعرض نصًّا صريحًا مرة واحدة فقط عند الإنشاء.
+
+    ApiCredentialResponse:
+      type: object
+      required: [id, name, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, REVOKED]
+        createdAt:
+          type: string
+          format: date-time
