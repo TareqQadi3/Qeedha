@@ -197,11 +197,12 @@ describe('TransactionsService', () => {
     ).rejects.toThrow('Invalid payment OTP');
   });
 
-  it('lists transactions by wallet', async () => {
+  it('lists transactions by wallet for the owning customer', async () => {
     const list = [{ id: 'tx-1' }];
+    (prisma.wallet.findUnique as jest.Mock).mockResolvedValue({ id: 'w-1', customerId: 'cust-1', merchantId: 'merch-1' });
     (prisma.transaction.findMany as jest.Mock).mockResolvedValue(list);
 
-    const result = await service.listByWallet('w-1');
+    const result = await service.listByWallet('w-1', { userId: 'cust-1', type: 'customer' });
     expect(result).toEqual(list);
     expect(prisma.transaction.findMany).toHaveBeenCalledWith({
       where: { walletId: 'w-1' },
@@ -209,16 +210,73 @@ describe('TransactionsService', () => {
     });
   });
 
-  it('lists transactions by cashier', async () => {
+  it('rejects listing another customer\'s wallet transactions', async () => {
+    (prisma.wallet.findUnique as jest.Mock).mockResolvedValue({ id: 'w-1', customerId: 'cust-1', merchantId: 'merch-1' });
+
+    await expect(
+      service.listByWallet('w-1', { userId: 'someone-else', type: 'customer' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(prisma.transaction.findMany).not.toHaveBeenCalled();
+  });
+
+  it('lists transactions by wallet for a merchant_user of the owning merchant', async () => {
+    const list = [{ id: 'tx-1' }];
+    (prisma.wallet.findUnique as jest.Mock).mockResolvedValue({ id: 'w-1', customerId: 'cust-1', merchantId: 'merch-1' });
+    (prisma.merchantUser.findUnique as jest.Mock).mockResolvedValue({ merchantId: 'merch-1' });
+    (prisma.transaction.findMany as jest.Mock).mockResolvedValue(list);
+
+    const result = await service.listByWallet('w-1', { userId: 'mu-1', type: 'merchant_user' });
+    expect(result).toEqual(list);
+  });
+
+  it('rejects a merchant_user from a different merchant listing this wallet', async () => {
+    (prisma.wallet.findUnique as jest.Mock).mockResolvedValue({ id: 'w-1', customerId: 'cust-1', merchantId: 'merch-1' });
+    (prisma.merchantUser.findUnique as jest.Mock).mockResolvedValue({ merchantId: 'other-merchant' });
+
+    await expect(
+      service.listByWallet('w-1', { userId: 'mu-2', type: 'merchant_user' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(prisma.transaction.findMany).not.toHaveBeenCalled();
+  });
+
+  it('lists transactions by cashier for the cashier themself', async () => {
     const list = [{ id: 'tx-2' }];
     (prisma.transaction.findMany as jest.Mock).mockResolvedValue(list);
 
-    const result = await service.listByCashier('cashier-1');
+    const result = await service.listByCashier('cashier-1', { userId: 'cashier-1', type: 'merchant_user' });
     expect(result).toEqual(list);
     expect(prisma.transaction.findMany).toHaveBeenCalledWith({
       where: { cashierId: 'cashier-1' },
       orderBy: { createdAt: 'desc' },
     });
+  });
+
+  it('lets an OWNER view a cashier under the same merchant', async () => {
+    const list = [{ id: 'tx-2' }];
+    (prisma.merchantUser.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ merchantId: 'merch-1', role: 'OWNER' })
+      .mockResolvedValueOnce({ merchantId: 'merch-1' });
+    (prisma.transaction.findMany as jest.Mock).mockResolvedValue(list);
+
+    const result = await service.listByCashier('cashier-1', { userId: 'owner-1', type: 'merchant_user' });
+    expect(result).toEqual(list);
+  });
+
+  it('rejects one cashier viewing another cashier\'s transactions', async () => {
+    (prisma.merchantUser.findUnique as jest.Mock)
+      .mockResolvedValueOnce({ merchantId: 'merch-1', role: 'CASHIER' })
+      .mockResolvedValueOnce({ merchantId: 'merch-1' });
+
+    await expect(
+      service.listByCashier('cashier-2', { userId: 'cashier-1', type: 'merchant_user' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(prisma.transaction.findMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a customer querying by cashierId', async () => {
+    await expect(
+      service.listByCashier('cashier-1', { userId: 'cust-1', type: 'customer' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('refunds a completed purchase', async () => {
