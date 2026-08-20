@@ -1,4 +1,4 @@
-import { ApiCredentialStatus, ApplicationStatus, FinancingPlan, MerchantStatus } from './types';
+import { ApiCredentialStatus, ApplicationStatus, FinancingPlan, MerchantStatus, SettlementStatus } from './types';
 import { TranslationKeys } from './i18n/ar';
 
 export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
@@ -42,6 +42,26 @@ export function planKey(plan: FinancingPlan): TranslationKeys {
 /** Only PENDING financing applications may be decided (approved/rejected) by an admin. */
 export function canDecideApplication(status: ApplicationStatus): boolean {
   return status === ApplicationStatus.PENDING;
+}
+
+export const settlementStatusTone: Record<SettlementStatus, Tone> = {
+  PENDING: 'warning',
+  PAID: 'info',
+  RECONCILED: 'success',
+};
+
+export function settlementStatusKey(status: SettlementStatus): TranslationKeys {
+  return `settlements_status_${status}` as TranslationKeys;
+}
+
+/** Only a PENDING settlement can be marked as paid (bank transfer sent). */
+export function canMarkPaid(status: SettlementStatus): boolean {
+  return status === 'PENDING';
+}
+
+/** Only a PAID settlement can be reconciled (bank statement matched). */
+export function canReconcile(status: SettlementStatus): boolean {
+  return status === 'PAID';
 }
 
 export function formatAmount(amount: string | number): string {

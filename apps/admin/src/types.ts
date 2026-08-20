@@ -53,3 +53,26 @@ export interface ApiCredentialCreated {
 }
 
 export type AdminDecision = 'APPROVED' | 'REJECTED';
+
+/** Not exported from @qeedha/shared yet — mirrors apps/api/prisma/schema.prisma. */
+export type SettlementStatus = 'PENDING' | 'PAID' | 'RECONCILED';
+
+export interface Settlement {
+  id: string;
+  merchantId: string;
+  period: string;
+  gross: string | number;
+  commission: string | number;
+  net: string | number;
+  status: SettlementStatus;
+  bankRef: string | null;
+  createdAt: string;
+  paidAt: string | null;
+}
+
+export interface SettlementRunResult {
+  period: string;
+  merchantsProcessed: number;
+  settlementsCreated: number;
+  totalGross: number;
+}

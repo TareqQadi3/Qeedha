@@ -521,10 +521,28 @@ paths:
         "200":
           description: تم استلام الحدث
 
-  /settlements:
+  /admin/settlements/run:
+    post:
+      tags: ["التسويات"]
+      summary: تشغيل احتساب التسوية اليومية لكل التجار النشطين عن فترة (يوم) محددة
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettlementRunRequest"
+      responses:
+        "201":
+          description: نتيجة التشغيل
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementRunResult"
+
+  /admin/settlements:
     get:
       tags: ["التسويات"]
-      summary: كشف التسويات للبقالة/المنصة
+      summary: كل التسويات (فلترة اختيارية بالتاجر و/أو الحالة)
       parameters:
         - name: merchantId
           in: query
@@ -541,9 +559,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SettlementListResponse"
+                type: array
+                items:
+                  $ref: "#/components/schemas/Settlement"
 
-  /settlements/{settlementId}:
+  /admin/settlements/{settlementId}:
     parameters:
       - $ref: "#/components/parameters/SettlementId"
     get:
@@ -557,25 +577,55 @@ paths:
               schema:
                 $ref: "#/components/schemas/Settlement"
 
-  /settlements/{settlementId}/reconcile:
+  /admin/settlements/{settlementId}/pay:
     parameters:
       - $ref: "#/components/parameters/SettlementId"
-    post:
+    patch:
       tags: ["التسويات"]
-      summary: تأكيد التسوية وإرفاق المرجع البنكي
+      summary: تسجيل دفع التسوية (بعد إتمام التحويل البنكي) — من PENDING إلى PAID فقط
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ReconcileRequest"
+              $ref: "#/components/schemas/SettlementMarkPaidRequest"
       responses:
         "200":
-          description: تمت التسوية
+          description: تم تسجيل الدفع
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Settlement"
+
+  /admin/settlements/{settlementId}/reconcile:
+    parameters:
+      - $ref: "#/components/parameters/SettlementId"
+    patch:
+      tags: ["التسويات"]
+      summary: تأكيد مطابقة كشف الحساب البنكي — من PAID إلى RECONCILED فقط
+      responses:
+        "200":
+          description: تمت المطابقة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settlement"
+
+  /merchants/{merchantId}/settlements:
+    parameters:
+      - $ref: "#/components/parameters/MerchantId"
+    get:
+      tags: ["التسويات"]
+      summary: عرض التاجر (Owner/Manager) لتسوياته الخاصة فقط
+      responses:
+        "200":
+          description: قائمة تسويات التاجر
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Settlement"
 
   /notifications/push-token:
     post:
@@ -1517,40 +1567,66 @@ components:
           format: uuid
         period:
           type: string
-          example: "2026-07"
+          description: يوم التسوية بصيغة YYYY-MM-DD (تجميع يومي، وليس شهريًا).
+          example: "2026-08-19"
         gross:
           type: number
           format: decimal
+          description: إجمالي المشتريات ناقص الاسترجاعات المكتملة خلال اليوم.
         commission:
           type: number
           format: decimal
         net:
           type: number
           format: decimal
+          description: الصافي المستحق للتاجر (gross - commission).
         status:
           $ref: "#/components/schemas/SettlementStatus"
         bankRef:
           type: string
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
 
     SettlementStatus:
       type: string
       enum: [PENDING, PAID, RECONCILED]
 
-    SettlementListResponse:
+    SettlementRunRequest:
       type: object
-      required: [data]
+      required: [period]
       properties:
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Settlement"
+        period:
+          type: string
+          example: "2026-08-19"
+          description: اليوم (UTC) المطلوب احتساب تسوياته لكل التجار النشطين.
 
-    ReconcileRequest:
+    SettlementRunResult:
+      type: object
+      required: [period, merchantsProcessed, settlementsCreated, totalGross]
+      properties:
+        period:
+          type: string
+        merchantsProcessed:
+          type: integer
+        settlementsCreated:
+          type: integer
+        totalGross:
+          type: number
+          format: decimal
+
+    SettlementMarkPaidRequest:
       type: object
       required: [bankRef]
       properties:
         bankRef:
           type: string
+          description: مرجع التحويل البنكي الفعلي بعد إرسال المبلغ للتاجر.
 
     PushTokenRequest:
       type: object

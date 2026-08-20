@@ -336,6 +336,7 @@ model Settlement {
 
   merchant Merchant @relation(fields: [merchantId], references: [id])
 
+  @@unique([merchantId, period])
   @@index([merchantId, period])
   @@index([status])
   @@map("settlements")

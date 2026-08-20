@@ -36,6 +36,7 @@ const en: Record<TranslationKeys, string> = {
   nav_applications: 'Financing Applications',
   nav_merchants: 'Merchants',
   nav_credentials: 'API Credentials',
+  nav_settlements: 'Settlements',
 
   login_subtitle: 'Staff sign in',
   login_email_placeholder: 'name@qeedha.sa',
@@ -109,6 +110,27 @@ const en: Record<TranslationKeys, string> = {
   credentials_api_key: 'API Key',
   credentials_api_secret: 'API Secret',
   credentials_reveal_confirm_close: "I've saved the secret, close",
+
+  settlements_title: 'Settlements',
+  settlements_empty: 'No matching settlements',
+  settlements_filter_all: 'All statuses',
+  settlements_run_period_label: 'Day (period)',
+  settlements_run_button: 'Run settlement',
+  settlements_run_success: 'Created {created} settlement(s) for {period} (out of {processed} active merchants)',
+  settlements_col_merchant: 'Merchant ID',
+  settlements_col_period: 'Period',
+  settlements_col_gross: 'Gross',
+  settlements_col_commission: 'Commission',
+  settlements_col_net: 'Net payable',
+  settlements_pay: 'Mark paid',
+  settlements_reconcile: 'Reconcile',
+  settlements_pay_modal_title: 'Record settlement payment',
+  settlements_pay_bankref_label: 'Bank transfer reference',
+  settlements_pay_bankref_placeholder: 'e.g. TRX-2026-000123',
+  settlements_pay_bankref_required: 'Please enter the bank transfer reference',
+  settlements_status_PENDING: 'Pending',
+  settlements_status_PAID: 'Paid',
+  settlements_status_RECONCILED: 'Reconciled',
 };
 
 export default en;

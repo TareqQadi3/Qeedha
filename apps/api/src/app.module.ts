@@ -14,6 +14,7 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { FinancingModule } from './financing/financing.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { IntegrationModule } from './integration/integration.module';
+import { SettlementsModule } from './settlements/settlements.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { IntegrationModule } from './integration/integration.module';
     FinancingModule,
     TransactionsModule,
     IntegrationModule,
+    SettlementsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -34,6 +34,7 @@ const ar = {
   nav_applications: 'طلبات التمويل',
   nav_merchants: 'التجار',
   nav_credentials: 'مفاتيح API',
+  nav_settlements: 'التسويات',
 
   login_subtitle: 'تسجيل دخول فريق العمل',
   login_email_placeholder: 'name@qeedha.sa',
@@ -107,6 +108,27 @@ const ar = {
   credentials_api_key: 'مفتاح API (Key)',
   credentials_api_secret: 'السر (Secret)',
   credentials_reveal_confirm_close: 'لقد حفظت السر، إغلاق',
+
+  settlements_title: 'التسويات',
+  settlements_empty: 'لا توجد تسويات مطابقة',
+  settlements_filter_all: 'كل الحالات',
+  settlements_run_period_label: 'اليوم (الفترة)',
+  settlements_run_button: 'تشغيل التسوية',
+  settlements_run_success: 'تم إنشاء {created} تسوية لفترة {period} (من أصل {processed} تاجر نشط)',
+  settlements_col_merchant: 'رقم التاجر',
+  settlements_col_period: 'الفترة',
+  settlements_col_gross: 'الإجمالي',
+  settlements_col_commission: 'العمولة',
+  settlements_col_net: 'الصافي المستحق',
+  settlements_pay: 'تسجيل الدفع',
+  settlements_reconcile: 'تأكيد المطابقة',
+  settlements_pay_modal_title: 'تسجيل دفع التسوية',
+  settlements_pay_bankref_label: 'مرجع التحويل البنكي',
+  settlements_pay_bankref_placeholder: 'مثال: TRX-2026-000123',
+  settlements_pay_bankref_required: 'الرجاء إدخال مرجع التحويل البنكي',
+  settlements_status_PENDING: 'معلّقة',
+  settlements_status_PAID: 'مدفوعة',
+  settlements_status_RECONCILED: 'تمت المطابقة',
 } as const;
 
 export type TranslationKeys = keyof typeof ar;

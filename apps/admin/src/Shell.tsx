@@ -5,9 +5,10 @@ import { PlatformStaffRole } from './types';
 import ApplicationsSection from './sections/ApplicationsSection';
 import MerchantsSection from './sections/MerchantsSection';
 import ApiCredentialsSection from './sections/ApiCredentialsSection';
+import SettlementsSection from './sections/SettlementsSection';
 import { TranslationKeys } from './i18n/ar';
 
-type View = 'applications' | 'merchants' | 'credentials';
+type View = 'applications' | 'merchants' | 'credentials' | 'settlements';
 
 interface SelectedMerchant {
   id: string;
@@ -18,6 +19,7 @@ const NAV_ITEMS: { view: View; labelKey: TranslationKeys }[] = [
   { view: 'applications', labelKey: 'nav_applications' },
   { view: 'merchants', labelKey: 'nav_merchants' },
   { view: 'credentials', labelKey: 'nav_credentials' },
+  { view: 'settlements', labelKey: 'nav_settlements' },
 ];
 
 export default function Shell({ onLoggedOut }: { onLoggedOut: () => void }) {
@@ -97,6 +99,7 @@ export default function Shell({ onLoggedOut }: { onLoggedOut: () => void }) {
               onGoToMerchants={() => setView('merchants')}
             />
           )}
+          {view === 'settlements' && <SettlementsSection />}
         </main>
       </div>
     </div>
