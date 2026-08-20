@@ -48,6 +48,12 @@ export class MerchantsController {
     return this.merchants.findById(id);
   }
 
+  @Get(':id/public')
+  @UseGuards(JwtAuthGuard)
+  async findPublicById(@Param('id') id: string) {
+    return this.merchants.findPublicById(id);
+  }
+
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(MerchantUserRole.OWNER)

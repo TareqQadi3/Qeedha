@@ -6,12 +6,14 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { CustomersService } from './customers.service';
 import { UpdateCustomerDto } from './dto/customer.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { NafathRequestDto } from '../auth/dto/auth.dto';
 import { NafathService } from '../auth/services/nafath.service';
+import { QrService } from '../auth/services/qr.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 
@@ -21,7 +23,9 @@ export class CustomersController {
   constructor(
     private readonly customers: CustomersService,
     private readonly nafath: NafathService,
+    private readonly qr: QrService,
     private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
   ) {}
 
   @Get('me')
@@ -45,5 +49,15 @@ export class CustomersController {
       data: { nationalIdHash: dto.nationalId },
     });
     return result;
+  }
+
+  @Get('me/qr-code')
+  async getQrCode(@CurrentUser() user: { userId: string }) {
+    const code = this.qr.generate(user.userId);
+    const expiresInSeconds = Number(this.config.get('QR_EXPIRES_IN_SECONDS', 60));
+    return {
+      token: `${user.userId}:${code}`,
+      expiresInSeconds,
+    };
   }
 }

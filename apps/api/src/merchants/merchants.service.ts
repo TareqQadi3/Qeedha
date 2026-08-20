@@ -36,6 +36,12 @@ export class MerchantsService {
     return merchant;
   }
 
+  async findPublicById(id: string) {
+    const merchant = await this.prisma.merchant.findUnique({ where: { id } });
+    if (!merchant) throw new DomainException('NOT_FOUND', 'Merchant not found');
+    return { id: merchant.id, name: merchant.name, status: merchant.status };
+  }
+
   async update(id: string, dto: UpdateMerchantDto) {
     const data: Prisma.MerchantUpdateInput = {};
     if (dto.name) data.name = dto.name;
