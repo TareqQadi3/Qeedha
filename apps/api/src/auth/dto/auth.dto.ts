@@ -1,4 +1,11 @@
-import { IsEnum, IsNotEmpty, IsString, Matches } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+} from 'class-validator';
 import { OtpPurpose } from '@prisma/client';
 
 export class OtpSendRequestDto {
@@ -9,6 +16,10 @@ export class OtpSendRequestDto {
 
   @IsEnum(OtpPurpose)
   purpose: OtpPurpose;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 }
 
 export class OtpVerifyRequestDto {

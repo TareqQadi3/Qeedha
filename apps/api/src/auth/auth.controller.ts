@@ -27,7 +27,11 @@ export class AuthController {
   @Post('otp/send')
   @HttpCode(HttpStatus.ACCEPTED)
   async sendOtp(@Body() dto: OtpSendRequestDto) {
-    const { expiresInSeconds } = await this.auth.sendOtp(dto.phone, dto.purpose);
+    const { expiresInSeconds } = await this.auth.sendOtp(
+      dto.phone,
+      dto.purpose,
+      dto.email,
+    );
     return {
       expiresInSeconds,
       canResendInSeconds: 60,
@@ -53,14 +57,20 @@ export class AuthController {
 
   @Post('pin/set')
   @UseGuards(JwtAuthGuard)
-  async setPin(@Body() dto: PinRequestDto, @CurrentUser() user: { userId: string }) {
+  async setPin(
+    @Body() dto: PinRequestDto,
+    @CurrentUser() user: { userId: string },
+  ) {
     await this.auth.setCustomerPin(user.userId, dto.pin);
     return { success: true };
   }
 
   @Post('pin/verify')
   @UseGuards(JwtAuthGuard)
-  async verifyPin(@Body() dto: PinVerifyRequestDto, @CurrentUser() user: { userId: string }) {
+  async verifyPin(
+    @Body() dto: PinVerifyRequestDto,
+    @CurrentUser() user: { userId: string },
+  ) {
     await this.auth.verifyCustomerPin(user.userId, dto.pin);
     return { success: true };
   }
