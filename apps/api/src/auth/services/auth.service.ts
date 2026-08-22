@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { compareSync } from 'bcryptjs';
 import { OtpPurpose } from '@prisma/client';
 import { OtpService } from './otp.service';
@@ -8,6 +9,9 @@ import { NafathService } from './nafath.service';
 import { PlatformStaffService } from '../../platform-staff/platform-staff.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DomainException } from '../../common/exceptions/domain.exception';
+import { NotificationsService } from '../../notifications/notifications.service';
+
+type OtpChannel = 'EMAIL' | 'SMS' | 'WHATSAPP';
 
 @Injectable()
 export class AuthService {
@@ -18,13 +22,65 @@ export class AuthService {
     private readonly nafath: NafathService,
     private readonly platformStaff: PlatformStaffService,
     private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+    private readonly config: ConfigService,
   ) {}
 
-  async sendOtp(phone: string, purpose: OtpPurpose) {
-    return this.otp.send(phone, purpose);
+  /**
+   * Verification channel today is EMAIL-first (product decision: SMS/WhatsApp
+   * wait until a Unifonic subscription is active). Switching channel later is
+   * an env-var change only (AUTH_OTP_CHANNEL) — no code change required.
+   */
+  async sendOtp(phone: string, purpose: OtpPurpose, email?: string) {
+    const { code, expiresInSeconds } = await this.otp.send(phone, purpose);
+    const channel = this.config.get<OtpChannel>('AUTH_OTP_CHANNEL', 'EMAIL');
+
+    const customer = await this.prisma.customer.findUnique({
+      where: { phone },
+    });
+
+    if (channel === 'EMAIL') {
+      const resolvedEmail = email ?? customer?.email ?? undefined;
+      if (!resolvedEmail) {
+        throw new DomainException(
+          'VALIDATION_ERROR',
+          'Email is required to receive the verification code',
+        );
+      }
+
+      if (customer && customer.email !== resolvedEmail) {
+        await this.prisma.customer.update({
+          where: { id: customer.id },
+          data: { email: resolvedEmail },
+        });
+      }
+
+      await this.notifications.send({
+        recipientType: 'customer',
+        recipientId: customer?.id ?? phone,
+        channel: 'EMAIL',
+        template: 'otp_code',
+        payload: { code, purpose, expiresInSeconds, to: resolvedEmail },
+      });
+    } else {
+      await this.notifications.send({
+        recipientType: 'customer',
+        recipientId: customer?.id ?? phone,
+        channel,
+        template: 'otp_code',
+        payload: { code, purpose, expiresInSeconds, to: phone },
+      });
+    }
+
+    return { code, expiresInSeconds };
   }
 
-  async verifyOtp(phone: string, purpose: OtpPurpose, code: string, fullName?: string) {
+  async verifyOtp(
+    phone: string,
+    purpose: OtpPurpose,
+    code: string,
+    fullName?: string,
+  ) {
     await this.otp.verify(phone, purpose, code);
 
     let customer = await this.prisma.customer.findUnique({ where: { phone } });
@@ -32,7 +88,10 @@ export class AuthService {
 
     if (isNewUser) {
       if (!fullName) {
-        throw new DomainException('VALIDATION_ERROR', 'fullName is required for new users');
+        throw new DomainException(
+          'VALIDATION_ERROR',
+          'fullName is required for new users',
+        );
       }
       customer = await this.prisma.customer.create({
         data: { phone, fullName, status: 'PENDING_KYC' },
@@ -88,6 +147,11 @@ export class AuthService {
       throw new DomainException('UNAUTHORIZED', 'Invalid credentials');
     }
     const tokens = await this.tokens.generateMerchantUserTokens(user.id);
-    return { ...tokens, role: user.role, merchantId: user.merchantId, userId: user.id };
+    return {
+      ...tokens,
+      role: user.role,
+      merchantId: user.merchantId,
+      userId: user.id,
+    };
   }
 }

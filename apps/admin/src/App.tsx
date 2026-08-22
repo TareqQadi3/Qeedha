@@ -1,10 +1,34 @@
+import { useEffect, useState } from 'react';
+import { getToken, setUnauthorizedHandler } from './api';
+import { I18nProvider, useI18n } from './i18n/I18nContext';
+import Login from './Login';
+import Shell from './Shell';
+
+function AppInner() {
+  const { dir, language } = useI18n();
+  const [token, setToken] = useState<string | null>(() => getToken());
+
+  useEffect(() => {
+    document.documentElement.dir = dir;
+    document.documentElement.lang = language;
+  }, [dir, language]);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => setToken(null));
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
+  if (!token) {
+    return <Login onLoggedIn={() => setToken(getToken())} />;
+  }
+
+  return <Shell onLoggedOut={() => setToken(null)} />;
+}
+
 export default function App() {
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50 text-slate-800">
-      <header className="bg-[#0E5F58] p-4 text-white">
-        <h1 className="text-xl font-bold">لوحة تحكم قيّدها</h1>
-      </header>
-      <main className="p-6">سيتم بناء لوحة الأدمن في المرحلة 3.</main>
-    </div>
+    <I18nProvider>
+      <AppInner />
+    </I18nProvider>
   );
 }

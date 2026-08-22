@@ -27,12 +27,12 @@ export class WalletsController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string) {
-    return this.wallets.findById(id);
+  async get(@Param('id') id: string, @CurrentUser() user: { userId: string }) {
+    return this.wallets.findById(id, user.userId);
   }
 
   @Get(':id/balance')
-  async balance(@Param('id') id: string) {
-    return this.wallets.getBalance(id);
+  async balance(@Param('id') id: string, @CurrentUser() user: { userId: string }) {
+    return this.wallets.getBalance(id, user.userId);
   }
 }

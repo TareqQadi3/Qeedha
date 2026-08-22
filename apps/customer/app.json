@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "قيّدها",
+    "slug": "qeedha-customer",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["android"],
+    "android": {
+      "package": "sa.qeedha.customer"
+    }
+  }
+}

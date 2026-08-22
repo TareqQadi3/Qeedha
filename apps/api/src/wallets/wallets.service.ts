@@ -32,15 +32,21 @@ export class WalletsService {
     return wallets.map((w) => this.toDto(w));
   }
 
-  async findById(walletId: string): Promise<WalletResponseDto> {
+  async findById(walletId: string, customerId: string): Promise<WalletResponseDto> {
     const wallet = await this.prisma.wallet.findUnique({ where: { id: walletId } });
     if (!wallet) throw new DomainException('NOT_FOUND', 'Wallet not found');
+    if (wallet.customerId !== customerId) {
+      throw new DomainException('FORBIDDEN', 'Wallet does not belong to this customer');
+    }
     return this.toDto(wallet);
   }
 
-  async getBalance(walletId: string): Promise<BalanceResponseDto> {
+  async getBalance(walletId: string, customerId: string): Promise<BalanceResponseDto> {
     const wallet = await this.prisma.wallet.findUnique({ where: { id: walletId } });
     if (!wallet) throw new DomainException('NOT_FOUND', 'Wallet not found');
+    if (wallet.customerId !== customerId) {
+      throw new DomainException('FORBIDDEN', 'Wallet does not belong to this customer');
+    }
     return {
       remainingAmount: Number(wallet.remainingAmount),
       totalAmount: Number(wallet.totalAmount),

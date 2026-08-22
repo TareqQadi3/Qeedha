@@ -1,4 +1,13 @@
-import { IsEnum, IsNotEmpty, IsNumber, IsObject, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsPositive,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { TransactionMethod } from '@prisma/client';
 
 export class PaymentRequestDto {
@@ -63,4 +72,8 @@ export class TransactionResponseDto {
   status: string;
   createdAt: Date;
   remainingAmount?: number;
+  branchId?: string | null;
+  externalTransactionId?: string | null;
+  externalSystem?: string | null;
+  invoiceReference?: string | null;
 }

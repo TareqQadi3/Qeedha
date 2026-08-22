@@ -18,6 +18,10 @@ export function createMockPrisma(): jest.Mocked<PrismaService> {
     notification: modelMock(),
     idempotencyKey: modelMock(),
     refreshToken: modelMock(),
+    merchantApiCredential: modelMock(),
+    externalCustomerMapping: modelMock(),
+    webhookEndpoint: modelMock(),
+    webhookDelivery: modelMock(),
   };
 
   const prisma = {

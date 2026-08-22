@@ -66,7 +66,7 @@ describe('WalletsService', () => {
     expect(result[0].remainingAmount).toBe(500);
   });
 
-  it('returns wallet by id', async () => {
+  it('returns wallet by id when the requesting customer owns it', async () => {
     (prisma.wallet.findUnique as jest.Mock).mockResolvedValue({
       id: 'w-1',
       customerId: 'c-1',
@@ -78,24 +78,55 @@ describe('WalletsService', () => {
       expiresAt: null,
     });
 
-    const result = await service.findById('w-1');
+    const result = await service.findById('w-1', 'c-1');
     expect(result.id).toBe('w-1');
   });
 
   it('throws when wallet not found', async () => {
     (prisma.wallet.findUnique as jest.Mock).mockResolvedValue(null);
-    await expect(service.findById('missing')).rejects.toThrow('Wallet not found');
+    await expect(service.findById('missing', 'c-1')).rejects.toThrow('Wallet not found');
   });
 
-  it('returns balance', async () => {
+  it('throws FORBIDDEN when the wallet belongs to a different customer', async () => {
     (prisma.wallet.findUnique as jest.Mock).mockResolvedValue({
       id: 'w-1',
+      customerId: 'c-1',
+      merchantId: 'm-1',
+      applicationId: 'a-1',
+      totalAmount: 1000,
+      remainingAmount: 500,
+      status: 'ACTIVE',
+      expiresAt: null,
+    });
+
+    await expect(service.findById('w-1', 'someone-else')).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('returns balance when the requesting customer owns the wallet', async () => {
+    (prisma.wallet.findUnique as jest.Mock).mockResolvedValue({
+      id: 'w-1',
+      customerId: 'c-1',
       totalAmount: 1000,
       remainingAmount: 300,
     });
 
-    const balance = await service.getBalance('w-1');
+    const balance = await service.getBalance('w-1', 'c-1');
     expect(balance.remainingAmount).toBe(300);
     expect(balance.currency).toBe('SAR');
+  });
+
+  it('throws FORBIDDEN for balance when the wallet belongs to a different customer', async () => {
+    (prisma.wallet.findUnique as jest.Mock).mockResolvedValue({
+      id: 'w-1',
+      customerId: 'c-1',
+      totalAmount: 1000,
+      remainingAmount: 300,
+    });
+
+    await expect(service.getBalance('w-1', 'someone-else')).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
   });
 });

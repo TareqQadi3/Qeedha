@@ -12,12 +12,14 @@ import { JwtStrategy } from './guards/jwt.strategy';
 import { RolesGuard } from './guards/roles.guard';
 import { AdminGuard } from './guards/admin.guard';
 import { PlatformStaffModule } from '../platform-staff/platform-staff.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({}),
     PlatformStaffModule,
+    NotificationsModule,
   ],
   controllers: [AuthController],
   providers: [
@@ -31,6 +33,15 @@ import { PlatformStaffModule } from '../platform-staff/platform-staff.module';
     RolesGuard,
     AdminGuard,
   ],
-  exports: [AuthService, OtpService, TokenService, PinService, NafathService, QrService, RolesGuard, AdminGuard],
+  exports: [
+    AuthService,
+    OtpService,
+    TokenService,
+    PinService,
+    NafathService,
+    QrService,
+    RolesGuard,
+    AdminGuard,
+  ],
 })
 export class AuthModule {}

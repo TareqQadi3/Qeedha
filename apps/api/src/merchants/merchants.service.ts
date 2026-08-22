@@ -30,13 +30,21 @@ export class MerchantsService {
     return this.prisma.merchant.create({ data });
   }
 
-  async findById(id: string) {
+  async findById(id: string, callerId: string) {
+    await this.assertCallerOwnsMerchant(callerId, id);
     const merchant = await this.prisma.merchant.findUnique({ where: { id } });
     if (!merchant) throw new DomainException('NOT_FOUND', 'Merchant not found');
     return merchant;
   }
 
-  async update(id: string, dto: UpdateMerchantDto) {
+  async findPublicById(id: string) {
+    const merchant = await this.prisma.merchant.findUnique({ where: { id } });
+    if (!merchant) throw new DomainException('NOT_FOUND', 'Merchant not found');
+    return { id: merchant.id, name: merchant.name, status: merchant.status };
+  }
+
+  async update(id: string, dto: UpdateMerchantDto, callerId: string) {
+    await this.assertCallerOwnsMerchant(callerId, id);
     const data: Prisma.MerchantUpdateInput = {};
     if (dto.name) data.name = dto.name;
     if (dto.iban) data.ibanEncrypted = this.encryption.encrypt(dto.iban);
@@ -56,7 +64,12 @@ export class MerchantsService {
     });
   }
 
-  async createBranch(merchantId: string, dto: CreateBranchDto) {
+  async createBranch(
+    merchantId: string,
+    dto: CreateBranchDto,
+    callerId: string,
+  ) {
+    await this.assertCallerOwnsMerchant(callerId, merchantId);
     return this.prisma.branch.create({
       data: {
         merchantId,
@@ -66,11 +79,17 @@ export class MerchantsService {
     });
   }
 
-  async listBranches(merchantId: string) {
+  async listBranches(merchantId: string, callerId: string) {
+    await this.assertCallerOwnsMerchant(callerId, merchantId);
     return this.prisma.branch.findMany({ where: { merchantId } });
   }
 
-  async createUser(merchantId: string, dto: CreateMerchantUserDto) {
+  async createUser(
+    merchantId: string,
+    dto: CreateMerchantUserDto,
+    callerId: string,
+  ) {
+    await this.assertCallerOwnsMerchant(callerId, merchantId);
     return this.prisma.merchantUser.create({
       data: {
         merchantId,
@@ -82,11 +101,18 @@ export class MerchantsService {
     });
   }
 
-  async listUsers(merchantId: string) {
+  async listUsers(merchantId: string, callerId: string) {
+    await this.assertCallerOwnsMerchant(callerId, merchantId);
     return this.prisma.merchantUser.findMany({ where: { merchantId } });
   }
 
-  async updateUser(merchantId: string, userId: string, dto: UpdateMerchantUserDto) {
+  async updateUser(
+    merchantId: string,
+    userId: string,
+    dto: UpdateMerchantUserDto,
+    callerId: string,
+  ) {
+    await this.assertCallerOwnsMerchant(callerId, merchantId);
     const user = await this.prisma.merchantUser.findFirst({
       where: { id: userId, merchantId },
     });
@@ -95,5 +121,20 @@ export class MerchantsService {
     if (dto.role) data.role = dto.role;
     if (dto.status) data.status = dto.status;
     return this.prisma.merchantUser.update({ where: { id: userId }, data });
+  }
+
+  /**
+   * Every non-admin merchant route is scoped to one merchant by an `:id`/
+   * `:merchantId` path param — verify the calling merchant_user actually
+   * belongs to that merchant before touching (or revealing) its data.
+   */
+  private async assertCallerOwnsMerchant(callerId: string, merchantId: string) {
+    const caller = await this.prisma.merchantUser.findUnique({
+      where: { id: callerId },
+      select: { merchantId: true },
+    });
+    if (!caller || caller.merchantId !== merchantId) {
+      throw new DomainException('FORBIDDEN', 'Cannot access another merchant');
+    }
   }
 }
