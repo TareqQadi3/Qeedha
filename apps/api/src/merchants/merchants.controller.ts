@@ -130,6 +130,25 @@ export class MerchantsController {
   ) {
     return this.merchants.updateUser(merchantId, userId, dto, user.userId);
   }
+
+  @Get(':id/transactions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(MerchantUserRole.OWNER, MerchantUserRole.MANAGER)
+  async listTransactions(
+    @Param('id') merchantId: string,
+    @CurrentUser() user: { userId: string },
+    @Query('branchId') branchId?: string,
+    @Query('status') status?: string,
+    @Query('take') take?: string,
+    @Query('skip') skip?: string,
+  ) {
+    return this.merchants.listTransactions(merchantId, user.userId, {
+      branchId,
+      status,
+      take: take ? Number(take) : undefined,
+      skip: skip ? Number(skip) : undefined,
+    });
+  }
 }
 
 @Controller('admin/merchants')

@@ -123,6 +123,34 @@ export class MerchantsService {
     return this.prisma.merchantUser.update({ where: { id: userId }, data });
   }
 
+  async listTransactions(
+    merchantId: string,
+    callerId: string,
+    filters: {
+      branchId?: string;
+      status?: string;
+      take?: number;
+      skip?: number;
+    },
+  ) {
+    await this.assertCallerOwnsMerchant(callerId, merchantId);
+    const take = Math.min(
+      filters.take && filters.take > 0 ? filters.take : 50,
+      200,
+    );
+    const skip = filters.skip && filters.skip > 0 ? filters.skip : 0;
+    return this.prisma.transaction.findMany({
+      where: {
+        wallet: { merchantId },
+        ...(filters.branchId ? { branchId: filters.branchId } : {}),
+        ...(filters.status ? { status: filters.status as any } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+      skip,
+    });
+  }
+
   /**
    * Every non-admin merchant route is scoped to one merchant by an `:id`/
    * `:merchantId` path param — verify the calling merchant_user actually

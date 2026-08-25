@@ -14,15 +14,7 @@ export default defineConfig({
   server: {
     port: 3002,
     proxy: {
-      '/auth': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      },
-      '/transactions': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      },
-      '/merchants': {
+      '/v1': {
         target: 'http://localhost:3001',
         changeOrigin: true,
       },

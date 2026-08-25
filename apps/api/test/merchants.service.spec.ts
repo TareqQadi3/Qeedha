@@ -103,4 +103,59 @@ describe('MerchantsService — cross-merchant access', () => {
       expect(prisma.merchantUser.update).not.toHaveBeenCalled();
     });
   });
+
+  describe('listTransactions', () => {
+    it('returns transactions scoped to the merchant, most recent first', async () => {
+      asOwnMerchant();
+      const transactions = [
+        { id: 'tx-2', walletId: 'w-2', createdAt: new Date('2026-08-20') },
+        { id: 'tx-1', walletId: 'w-1', createdAt: new Date('2026-08-19') },
+      ];
+      (prisma.transaction.findMany as jest.Mock).mockResolvedValue(transactions);
+
+      const result = await service.listTransactions('merch-1', 'caller-1', {});
+
+      expect(result).toEqual(transactions);
+      expect(prisma.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ wallet: { merchantId: 'merch-1' } }),
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          skip: 0,
+        }),
+      );
+    });
+
+    it('applies branchId/status filters and caps take at 200', async () => {
+      asOwnMerchant();
+      (prisma.transaction.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.listTransactions('merch-1', 'caller-1', {
+        branchId: 'branch-1',
+        status: 'COMPLETED',
+        take: 9999,
+        skip: 10,
+      });
+
+      expect(prisma.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            wallet: { merchantId: 'merch-1' },
+            branchId: 'branch-1',
+            status: 'COMPLETED',
+          },
+          take: 200,
+          skip: 10,
+        }),
+      );
+    });
+
+    it("rejects listing another merchant's transactions", async () => {
+      asOtherMerchant();
+      await expect(service.listTransactions('merch-1', 'caller-1', {})).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(prisma.transaction.findMany).not.toHaveBeenCalled();
+    });
+  });
 });

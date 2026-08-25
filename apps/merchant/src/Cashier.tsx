@@ -130,7 +130,7 @@ export default function Cashier() {
 
   useEffect(() => {
     if (step !== 'qr') return;
-    let mounted = true;
+    const mounted = true;
     (async () => {
       const ok = await startScanner();
       if (!mounted || !ok) stopScanner();

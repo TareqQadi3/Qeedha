@@ -44,7 +44,7 @@ export async function api<T = unknown>(
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(path, { ...options, headers });
+  const res = await fetch(`/v1${path}`, { ...options, headers });
   const text = await res.text();
   const body = text ? JSON.parse(text) : null;
 
